@@ -1,0 +1,35 @@
+---
+# Backup container images from all nodes
+# Usage: ansible-playbook -i hosts.ini backup_images.yml
+
+- name: Backup Container Images from All Nodes
+  hosts: 
+    - master_nodes
+    - worker_nodes
+  become: true
+  gather_facts: yes
+  
+  tasks:
+    - name: Include backup images tasks
+      include_role:
+        name: extras
+        tasks_from: backup_images
+      tags:
+        - backup
+        - images
+
+- name: Display overall backup summary
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Show completion message
+      debug:
+        msg: |
+          ===============================================
+          BACKUP OPERATION COMPLETED
+          ===============================================
+          All nodes have completed image backup.
+          
+          Next step:
+            ansible-playbook -i hosts.ini copy_backups.yml
+          ===============================================

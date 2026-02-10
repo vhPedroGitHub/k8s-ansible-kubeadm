@@ -1,0 +1,6 @@
+---
+# Main tasks file for extras role
+# Manages container image backup and restore operations
+
+# This file serves as an entry point for the extras role
+# Individual tasks should be included based on playbook tags or explicit includes

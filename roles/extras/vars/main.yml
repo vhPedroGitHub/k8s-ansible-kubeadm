@@ -1,0 +1,7 @@
+---
+# Variables for extras role
+
+extras:
+  backup_dir: /tmp/k8s-images-backup
+  restore_dir: /opt/tarz-k8s/restore-in-all-nodes
+  containerd_namespace: k8s.io

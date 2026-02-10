@@ -1,0 +1,82 @@
+---
+# Copy backup tar files from local machine to all nodes
+
+- name: Create restore directory on all nodes
+  ansible.builtin.file:
+    path: /opt/tarz-k8s/restore-in-all-nodes
+    state: directory
+    mode: '0755'
+    owner: root
+    group: root
+  become: yes
+
+- name: Check if local backup directory exists
+  stat:
+    path: "{{ playbook_dir }}/backups-images"
+  register: local_backup_dir
+  delegate_to: localhost
+  become: no
+
+- name: Fail if local backup directory doesn't exist
+  fail:
+    msg: "Local backup directory {{ playbook_dir }}/backups-images not found. Run backup-images first."
+  when: not local_backup_dir.stat.exists
+
+- name: Find all node backup directories
+  find:
+    paths: "{{ playbook_dir }}/backups-images"
+    file_type: directory
+    recurse: no
+  register: node_dirs
+  delegate_to: localhost
+  become: no
+
+- name: Find all tar files from all nodes in local backup
+  find:
+    paths: "{{ playbook_dir }}/backups-images"
+    patterns: "*.tar"
+    recurse: yes
+  register: local_backup_files
+  delegate_to: localhost
+  become: no
+
+- name: Copy tar files from local to remote restore directory
+  copy:
+    src: "{{ item.path }}"
+    dest: "/opt/tarz-k8s/restore-in-all-nodes/{{ item.path | basename }}"
+    mode: '0644'
+    owner: root
+    group: root
+  loop: "{{ local_backup_files.files }}"
+  when: local_backup_files.files | length > 0
+  become: yes
+
+- name: Get list of files in restore directory
+  find:
+    paths: /opt/tarz-k8s/restore-in-all-nodes
+    patterns: "*.tar"
+  register: restore_files
+  become: yes
+
+- name: Calculate total size of backups
+  shell: du -sh /opt/tarz-k8s/restore-in-all-nodes | awk '{print $1}'
+  register: backup_size
+  changed_when: false
+  become: yes
+
+- name: Display copy summary
+  debug:
+    msg: |
+      ===============================================
+      BACKUP COPY SUMMARY - {{ inventory_hostname }}
+      ===============================================
+      Source: {{ playbook_dir }}/backups-images/
+      Destination: /opt/tarz-k8s/restore-in-all-nodes
+      Files copied to this node: {{ restore_files.files | length }}
+      Total size on this node: {{ backup_size.stdout }}
+      
+      Files in restore directory:
+      {% for file in restore_files.files %}
+        - {{ file.path | basename }} ({{ (file.size / 1024 / 1024) | round(2) }} MB)
+      {% endfor %}
+      ===============================================

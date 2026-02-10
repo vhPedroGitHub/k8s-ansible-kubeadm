@@ -1,0 +1,92 @@
+---
+# Backup all container images from each node
+# Creates individual .tar files for each image
+
+- name: Create backup directory
+  ansible.builtin.file:
+    path: /tmp/k8s-images-backup
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Get list of all container images
+  shell: |
+    ctr -n k8s.io images list -q | grep -v 'sha256:' | sort | uniq
+  register: images_list
+  changed_when: false
+  failed_when: false
+  become: yes
+
+- name: Display found images
+  debug:
+    msg: "Found {{ images_list.stdout_lines | length }} images on {{ inventory_hostname }}"
+
+- name: Export each image to tar file
+  shell: |
+    IMAGE_NAME="{{ item }}"
+    # Convert image name to valid filename (replace / and : with _)
+    TAR_NAME=$(echo "$IMAGE_NAME" | sed 's/[\/:]/_/g' | sed 's/@sha256.*//').tar
+    ctr -n k8s.io images export "/tmp/k8s-images-backup/$TAR_NAME" "$IMAGE_NAME"
+  loop: "{{ images_list.stdout_lines }}"
+  when: images_list.stdout_lines | length > 0
+  become: yes
+  register: export_result
+  failed_when: false
+
+- name: Get list of created tar files
+  find:
+    paths: /tmp/k8s-images-backup
+    patterns: "*.tar"
+  register: tar_files
+  become: yes
+
+- name: Create local backup directory on control machine
+  file:
+    path: "{{ playbook_dir }}/backups-images/{{ inventory_hostname }}"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+  become: no
+  run_once: false
+
+- name: Fetch tar files to local machine
+  fetch:
+    src: "{{ item.path }}"
+    dest: "{{ playbook_dir }}/backups-images/{{ inventory_hostname }}/{{ item.path | basename }}"
+    flat: yes
+  loop: "{{ tar_files.files }}"
+  when: tar_files.files | length > 0
+  become: yes
+
+- name: Get list of fetched files
+  find:
+    paths: "{{ playbook_dir }}/backups-images/{{ inventory_hostname }}"
+    patterns: "*.tar"
+  register: local_files
+  delegate_to: localhost
+  become: no
+
+- name: Display backup summary
+  debug:
+    msg: |
+      ===============================================
+      IMAGE BACKUP SUMMARY - {{ inventory_hostname }}
+      ===============================================
+      Total images backed up: {{ images_list.stdout_lines | length }}
+      Remote backup location: /tmp/k8s-images-backup/
+      Local backup location: {{ playbook_dir }}/backups-images/{{ inventory_hostname }}/
+      Files downloaded to local: {{ local_files.files | length }}
+      
+      Individual tar files created:
+      {% for file in tar_files.files %}
+        - {{ file.path | basename }}
+      {% endfor %}
+      ===============================================
+  when: tar_files.files | length > 0
+
+- name: Cleanup remote temporary backup directory
+  ansible.builtin.file:
+    path: /tmp/k8s-images-backup
+    state: absent
+  become: yes
+  when: local_files.files | length > 0

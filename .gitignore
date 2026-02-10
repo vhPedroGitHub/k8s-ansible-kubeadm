@@ -1,0 +1,15 @@
+# Container image backups (local cache)
+backups-images/
+
+# Ansible retry files
+*.retry
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary files
+*.tmp
+*.swp
+*~

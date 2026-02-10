@@ -1,0 +1,38 @@
+---
+# Copy backup tar files to restore directory
+# Usage: ansible-playbook -i hosts.ini copy_backups.yml
+
+- name: Copy Backups to Restore Directory
+  hosts: 
+    - master_nodes
+    - worker_nodes
+  become: true
+  gather_facts: yes
+  
+  tasks:
+    - name: Include copy backups tasks
+      include_role:
+        name: extras
+        tasks_from: copy_backups
+      tags:
+        - copy
+        - backups
+
+- name: Display overall copy summary
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Show completion message
+      debug:
+        msg: |
+          ===============================================
+          COPY OPERATION COMPLETED
+          ===============================================
+          All backup files have been copied to:
+            /opt/tarz-k8s/restore-in-all-nodes
+          
+          Backups are now ready for restore.
+          
+          Next step:
+            ansible-playbook -i hosts.ini restore_images.yml
+          ===============================================

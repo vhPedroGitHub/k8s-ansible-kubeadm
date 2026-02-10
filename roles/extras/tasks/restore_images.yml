@@ -1,0 +1,99 @@
+---
+# Restore container images from tar files
+
+- name: Check if restore directory exists
+  stat:
+    path: /opt/tarz-k8s/restore-in-all-nodes
+  register: restore_dir
+  become: yes
+
+- name: Fail if restore directory doesn't exist
+  fail:
+    msg: "Restore directory /opt/tarz-k8s/restore-in-all-nodes not found. Run backup and copy tasks first."
+  when: not restore_dir.stat.exists
+
+- name: Find all tar files in restore directory
+  find:
+    paths: /opt/tarz-k8s/restore-in-all-nodes
+    patterns: "*.tar"
+    recurse: no
+  register: tar_files
+  become: yes
+
+- name: Display found tar files
+  debug:
+    msg: |
+      ===============================================
+      RESTORE PREPARATION - {{ inventory_hostname }}
+      ===============================================
+      Found {{ tar_files.files | length }} tar file(s) to restore
+      ===============================================
+
+- name: Check current images before restore
+  shell: ctr -n k8s.io images list -q | wc -l
+  register: images_before
+  changed_when: false
+  become: yes
+
+- name: Import images from tar files
+  shell: |
+    ctr -n k8s.io images import "{{ item.path }}"
+  loop: "{{ tar_files.files }}"
+  when: tar_files.files | length > 0
+  become: yes
+  register: import_result
+  failed_when: false
+
+- name: Check current images after restore
+  shell: ctr -n k8s.io images list -q | wc -l
+  register: images_after
+  changed_when: false
+  become: yes
+
+- name: Get list of restored images
+  shell: ctr -n k8s.io images list -q | grep -v 'sha256:' | sort
+  register: restored_images
+  changed_when: false
+  become: yes
+
+- name: Calculate import statistics
+  set_fact:
+    images_imported: "{{ images_after.stdout | int - images_before.stdout | int }}"
+    successful_imports: "{{ import_result.results | selectattr('rc', 'equalto', 0) | list | length }}"
+    failed_imports: "{{ import_result.results | rejectattr('rc', 'equalto', 0) | list | length }}"
+
+- name: Display restore summary
+  debug:
+    msg: |
+      ===============================================
+      IMAGE RESTORE SUMMARY - {{ inventory_hostname }}
+      ===============================================
+      Tar files processed: {{ tar_files.files | length }}
+      Successful imports: {{ successful_imports }}
+      Failed imports: {{ failed_imports }}
+      
+      Images before restore: {{ images_before.stdout }}
+      Images after restore: {{ images_after.stdout }}
+      Net change: {{ images_imported }}
+      
+      Current images in system:
+      {% for image in restored_images.stdout_lines[:20] %}
+        - {{ image }}
+      {% endfor %}
+      {% if restored_images.stdout_lines | length > 20 %}
+        ... and {{ restored_images.stdout_lines | length - 20 }} more
+      {% endif %}
+      ===============================================
+
+- name: Show failed imports if any
+  debug:
+    msg: |
+      WARNING: Failed to import from tar file:
+      {{ item.item.path | basename }}
+      Error: {{ item.stderr | default('Unknown error') }}
+  loop: "{{ import_result.results }}"
+  when: 
+    - import_result.results is defined
+    - item.rc != 0
+  loop_control:
+    label: "{{ item.item.path | basename }}"

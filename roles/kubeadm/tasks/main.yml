@@ -1,18 +1,18 @@
 ---
-# Main task file for kubeadmin role
+# Main task file for kubeadm role
 # This file orchestrates the execution of different tasks based on tags
-- name: Init kubeadmin setup
-  import_tasks: roles/kubeadm/tasks/kubeadmin.yml
-  tags: kubeadmin
+- name: Init kubeadm setup
+  import_tasks: roles/kubeadm/tasks/kubeadm.yml
+  tags: kubeadm
 
 # TODO: implement playbook to setup nodes with kubeadm configs
-- name: Init kubeadmin setup with configs files
-  import_tasks: roles/kubeadm/tasks/kubeadmin-configs.yml
-  tags: kubeadmin-configs
+- name: Init kubeadm setup with configs files
+  import_tasks: roles/kubeadm/tasks/kubeadm-configs.yml
+  tags: kubeadm-configs
 
-- name: Init uninstall kubeadmin
-  import_tasks: roles/kubeadm/tasks/uninstall_kubeadmin.yml
-  tags: uninstall-kubeadmin
+- name: Init uninstall kubeadm
+  import_tasks: roles/kubeadm/tasks/uninstall_kubeadm.yml
+  tags: uninstall-kubeadm
 
 - name: Add worker nodes
   import_tasks: roles/kubeadm/tasks/add_worker_nodes.yml

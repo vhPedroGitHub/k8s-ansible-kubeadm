@@ -1,0 +1,38 @@
+---
+# Restore container images from tar files
+# Usage: ansible-playbook -i hosts.ini restore_images.yml
+
+- name: Restore Container Images on All Nodes
+  hosts: 
+    - master_nodes
+    - worker_nodes
+  become: true
+  gather_facts: yes
+  
+  tasks:
+    - name: Include restore images tasks
+      include_role:
+        name: extras
+        tasks_from: restore_images
+      tags:
+        - restore
+        - images
+
+- name: Display overall restore summary
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Show completion message
+      debug:
+        msg: |
+          ===============================================
+          RESTORE OPERATION COMPLETED
+          ===============================================
+          All container images have been restored.
+          
+          Verify with:
+            ansible all -i hosts.ini -m shell -a "ctr -n k8s.io images list"
+          
+          To clean up backup files:
+            ansible all -i hosts.ini -m file -a "path=/opt/tarz-k8s/restore-in-all-nodes state=absent" -b
+          ===============================================
