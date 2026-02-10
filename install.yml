@@ -4,5 +4,6 @@
     - master_nodes
     - worker_nodes
   become: true
+  strategy: free
   roles:
-    - role: kubeadm
+    - role: installs

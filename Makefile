@@ -10,11 +10,13 @@ export EXTRA_VARS ?= "@$(K8s_ROOT_DIR)/vars/main.yml"
 
 # Makefile for kubeadmin
 
-KUBEADMIN_PLAYBOOK := $(KUBEADMIN_ROOT_DIR)/install.yml
+KUBEADMIN_PLAYBOOK_INSTALL := $(KUBEADMIN_ROOT_DIR)/install.yml
+KUBEADMIN_PLAYBOOK_UNINSTALL := $(KUBEADMIN_ROOT_DIR)/uninstall.yml
+KUBEADMIN_PLAYBOOK := $(KUBEADMIN_ROOT_DIR)/kubeadm.yml
 
 # Install kubeadm, kubelet, kubectl, and containerd
 kubeadmin-install:
-	ansible-playbook -i $(HOSTS_INI_FILE) $(KUBEADMIN_PLAYBOOK) \
+	ansible-playbook -i $(HOSTS_INI_FILE) $(KUBEADMIN_PLAYBOOK_INSTALL) \
 		--tags "install" --extra-vars "ROOT_DIR=$(ROOT_DIR)" \
 		--extra-vars $(EXTRA_VARS)
 
@@ -46,13 +48,13 @@ kubeadmin-remove-workers:
 
 # Uninstall kubeadm, kubelet, kubectl, and containerd
 kubeadmin-uninstall:
-	ansible-playbook -i $(HOSTS_INI_FILE) $(KUBEADMIN_PLAYBOOK) \
+	ansible-playbook -i $(HOSTS_INI_FILE) $(KUBEADMIN_PLAYBOOK_UNINSTALL) \
 		--tags "uninstall" --extra-vars "ROOT_DIR=$(ROOT_DIR)" \
 		--extra-vars $(EXTRA_VARS)
 
 # Restore swap after uninstallation (optional)
 kubeadmin-restore-swap:
-	ansible-playbook -i $(HOSTS_INI_FILE) $(KUBEADMIN_PLAYBOOK) \
+	ansible-playbook -i $(HOSTS_INI_FILE) $(KUBEADMIN_PLAYBOOK_UNINSTALL) \
 		--tags "restore-swap" --extra-vars "ROOT_DIR=$(ROOT_DIR)" \
 		--extra-vars $(EXTRA_VARS)
 
