@@ -1,0 +1,43 @@
+---
+- name: Drain worker nodes
+  kubernetes.core.k8s_drain:
+    name: "{{ inventory_hostname }}"
+    delete_emptydir_data: true
+    force: true
+    ignore_daemonsets: true
+  environment:
+    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+  delegate_to: "{{ groups['master_nodes'][0] }}"
+  when: 
+    - inventory_hostname in groups['worker_nodes']
+    - inventory_hostname not in groups['master_nodes']
+
+- name: Delete worker nodes from cluster
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Node
+    name: "{{ inventory_hostname }}"
+  environment:
+    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+  delegate_to: "{{ groups['master_nodes'][0] }}"
+  when: 
+    - inventory_hostname in groups['worker_nodes']
+    - inventory_hostname not in groups['master_nodes']
+
+- name: Reset kubeadm on worker nodes
+  become: yes
+  command: kubeadm reset --force
+  when: 
+    - inventory_hostname in groups['worker_nodes']
+    - inventory_hostname not in groups['master_nodes']
+
+- name: Clean up worker node
+  become: yes
+  shell: |
+    iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+    rm -rf /etc/cni/net.d
+  ignore_errors: yes
+  when: 
+    - inventory_hostname in groups['worker_nodes']
+    - inventory_hostname not in groups['master_nodes']

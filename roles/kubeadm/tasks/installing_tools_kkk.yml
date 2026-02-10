@@ -1,0 +1,122 @@
+---
+- name: Check if crictl exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/crictl
+  register: crictl_exists
+
+- name: Download and extract crictl
+  ansible.builtin.unarchive:
+    src: "{{ kubeadmin.crictl.url_targz }}"
+    dest: /usr/local/bin
+    remote_src: yes
+  when: not crictl_exists.stat.exists
+
+- name: Get latest Kubernetes release version
+  ansible.builtin.uri:
+    url: https://dl.k8s.io/release/{{stable.txt}}
+    return_content: yes
+  register: k8s_release
+  when: kubeadmin.kubernetes.version is not defined
+
+- name: Check if kubeadm exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/kubeadm
+  register: kubeadm_exists
+
+- name: Download kubeadm binary
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ k8s_release.content | trim | default(kubeadmin.kubernetes.version) }}/bin/linux/amd64/kubeadm"
+    dest: /usr/local/bin/kubeadm
+    mode: '0755'
+  when: not kubeadm_exists.stat.exists
+
+- name: Check if kubelet exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/kubelet
+  register: kubelet_exists
+
+- name: Download kubelet binary
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ k8s_release.content | trim | default(kubeadmin.kubernetes.version) }}/bin/linux/amd64/kubelet"
+    dest: /usr/local/bin/kubelet
+    mode: '0755'
+  when: not kubelet_exists.stat.exists
+
+- name: Check if kubectl exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/kubectl
+  register: kubectl_exists
+
+- name: Download kubectl binary
+  ansible.builtin.get_url:
+    url: "https://dl.k8s.io/release/{{ k8s_release.content | trim | default(kubeadmin.kubernetes.version) }}/bin/linux/amd64/kubectl"
+    dest: /usr/local/bin/kubectl
+    mode: '0755'
+  when: not kubectl_exists.stat.exists
+
+- name: Check if kubelet service file exists
+  ansible.builtin.stat:
+    path: /usr/lib/systemd/system/kubelet.service
+  register: kubelet_service_exists
+
+- name: Download kubelet systemd service file
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/kubernetes/release/{{ kubeadmin.kubelet.version }}/cmd/krel/templates/latest/kubelet/kubelet.service"
+    dest: /tmp/kubelet.service
+    mode: '0644'
+  when: not kubelet_service_exists.stat.exists
+
+- name: Update kubelet service file with correct binary path
+  ansible.builtin.replace:
+    path: /tmp/kubelet.service
+    regexp: '/usr/bin'
+    replace: '/usr/local/bin'
+  when: not kubelet_service_exists.stat.exists
+
+- name: Copy kubelet service file to systemd directory
+  ansible.builtin.copy:
+    src: /tmp/kubelet.service
+    dest: /usr/lib/systemd/system/kubelet.service
+    remote_src: yes
+    mode: '0644'
+  when: not kubelet_service_exists.stat.exists
+
+- name: Create kubelet service.d directory
+  ansible.builtin.file:
+    path: /usr/lib/systemd/system/kubelet.service.d
+    state: directory
+    mode: '0755'
+
+- name: Check if kubeadm drop-in configuration exists
+  ansible.builtin.stat:
+    path: /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+  register: kubeadm_conf_exists
+
+- name: Download kubeadm drop-in configuration
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/kubernetes/release/{{ kubeadmin.kubeadm.version }}/cmd/krel/templates/latest/kubeadm/10-kubeadm.conf"
+    dest: /tmp/10-kubeadm.conf
+    mode: '0644'
+  when: not kubeadm_conf_exists.stat.exists
+
+- name: Update kubeadm drop-in with correct binary path
+  ansible.builtin.replace:
+    path: /tmp/10-kubeadm.conf
+    regexp: '/usr/bin'
+    replace: '/usr/local/bin'
+  when: not kubeadm_conf_exists.stat.exists
+
+- name: Copy kubeadm drop-in to systemd directory
+  ansible.builtin.copy:
+    src: /tmp/10-kubeadm.conf
+    dest: /usr/lib/systemd/system/kubelet.service.d/10-kubeadm.conf
+    remote_src: yes
+    mode: '0644'
+  when: not kubeadm_conf_exists.stat.exists
+
+- name: Enable and start kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    enabled: yes
+    state: started
+    daemon_reload: yes

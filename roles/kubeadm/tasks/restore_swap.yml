@@ -1,0 +1,116 @@
+---
+# Restore swap configuration (optional - only if you want to re-enable swap)
+# Target OS: Ubuntu 24.04
+
+# ============================================
+# 1. UNMASK SWAP SERVICES
+# ============================================
+- name: Unmask swap.target
+  systemd:
+    name: swap.target
+    masked: no
+  ignore_errors: yes
+
+- name: Find masked swap units
+  shell: systemctl list-unit-files --type=swap --state=masked --no-legend | awk '{print $1}'
+  register: masked_swap_units
+  changed_when: false
+  failed_when: false
+
+- name: Unmask systemd swap units
+  systemd:
+    name: "{{ item }}"
+    masked: no
+  loop: "{{ masked_swap_units.stdout_lines }}"
+  when: masked_swap_units.stdout_lines | length > 0
+  ignore_errors: yes
+
+# ============================================
+# 2. RESTORE /etc/fstab SWAP ENTRIES
+# ============================================
+- name: Check if commented swap entries exist in /etc/fstab
+  shell: grep '^\s*#.*swap.*# Disabled for Kubernetes' /etc/fstab || true
+  register: commented_swap
+  changed_when: false
+
+- name: Display commented swap entries
+  debug:
+    msg: "{{ 'Found commented swap entries that can be restored' if commented_swap.stdout else 'No commented swap entries found in /etc/fstab' }}"
+
+- name: Restore swap entries in /etc/fstab (manual action required)
+  debug:
+    msg: |
+      WARNING: Swap entries were commented out in /etc/fstab.
+      If you want to restore them, manually edit /etc/fstab
+      and uncomment lines containing "# Disabled for Kubernetes"
+  when: commented_swap.stdout | length > 0
+
+# ============================================
+# 3. RE-ENABLE ZRAM (Ubuntu 24.04)
+# ============================================
+- name: Check if zram-generator config was disabled
+  stat:
+    path: /etc/systemd/zram-generator.conf
+  register: zram_config
+
+- name: Remove disabled zram-generator config
+  file:
+    path: /etc/systemd/zram-generator.conf
+    state: absent
+  when: zram_config.stat.exists
+
+- name: Restore default zram-generator config
+  copy:
+    content: |
+      # This config enables zram-generator with default settings
+      [zram0]
+      zram-size = ram / 2
+      compression-algorithm = zstd
+    dest: /etc/systemd/zram-generator.conf
+    mode: '0644'
+
+# ============================================
+# 4. RESTART SYSTEMD-ZRAM-SETUP
+# ============================================
+- name: Restart systemd-zram-setup@zram0 service
+  systemd:
+    name: systemd-zram-setup@zram0
+    state: restarted
+  ignore_errors: yes
+
+# ============================================
+# 5. VERIFY SWAP STATUS
+# ============================================
+- name: Wait for swap to be available
+  pause:
+    seconds: 2
+
+- name: Check swap status
+  command: swapon --show
+  register: swap_status
+  changed_when: false
+  failed_when: false
+
+- name: Display swap restoration summary
+  debug:
+    msg: |
+      
+      ╔══════════════════════════════════════════════════════════════════╗
+      ║                   SWAP RESTORATION SUMMARY                       ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Swap Status: {{ ('ENABLED ✓' if swap_status.stdout else 'DISABLED') | center(49) }} ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Actions Taken:                                                   ║
+      ║   - Unmasked swap.target                                         ║
+      ║   - Unmasked swap units                                          ║
+      ║   - Restored zram-generator config                               ║
+      ║   - Restarted zram setup service                                 ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Note: /etc/fstab entries must be manually uncommented            ║
+      ║       if you want to restore disk-based swap partitions          ║
+      ╚══════════════════════════════════════════════════════════════════╝
+
+- name: Show current swap devices
+  debug:
+    msg: "{{ swap_status.stdout_lines }}"
+  when: swap_status.stdout | length > 0

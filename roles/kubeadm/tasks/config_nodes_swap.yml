@@ -1,0 +1,155 @@
+---
+# Configure nodes for Kubernetes - Disable Swap
+# Based on: https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+# Target OS: Ubuntu 24.04
+
+
+# ============================================
+# 1. DISABLE SWAP TEMPORARILY
+# ============================================
+- name: Check current swap status
+  command: swapon --show
+  register: swap_status_before
+  changed_when: false
+  failed_when: false
+
+- name: Display current swap status
+  debug:
+    msg: "{{ 'Swap is currently ENABLED' if swap_status_before.stdout else 'Swap is already DISABLED' }}"
+
+- name: Disable swap temporarily (swapoff -a)
+  command: swapoff -a
+  when: swap_status_before.stdout | length > 0
+
+# ============================================
+# 2. DISABLE SWAP PERMANENTLY IN /etc/fstab
+# ============================================
+- name: Check if swap entry exists in /etc/fstab
+  shell: grep -E '^\s*[^#].*\s+swap\s+' /etc/fstab || true
+  register: fstab_swap
+  changed_when: false
+
+- name: Display fstab swap entries
+  debug:
+    msg: "{{ 'Swap entries found in /etc/fstab: ' + fstab_swap.stdout if fstab_swap.stdout else 'No active swap entries in /etc/fstab' }}"
+
+- name: Comment out swap entries in /etc/fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^(\s*)([^#].*?\sswap\s+.*)$'
+    replace: '\1# \2 # Disabled for Kubernetes'
+    backup: yes
+  when: fstab_swap.stdout | length > 0
+
+# ============================================
+# 3. DISABLE SWAP IN SYSTEMD (Ubuntu 24.04)
+# ============================================
+- name: Find all swap units in systemd
+  shell: systemctl list-units --type=swap --all --no-legend | awk '{print $1}'
+  register: swap_units
+  changed_when: false
+  failed_when: false
+
+- name: Display systemd swap units
+  debug:
+    msg: "{{ 'Systemd swap units found: ' + swap_units.stdout_lines | join(', ') if swap_units.stdout else 'No systemd swap units found' }}"
+
+- name: Stop systemd swap units
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+  loop: "{{ swap_units.stdout_lines }}"
+  when: swap_units.stdout_lines | length > 0
+  ignore_errors: yes
+
+- name: Mask systemd swap units (prevent activation)
+  systemd:
+    name: "{{ item }}"
+    masked: yes
+  loop: "{{ swap_units.stdout_lines }}"
+  when: swap_units.stdout_lines | length > 0
+  ignore_errors: yes
+
+# ============================================
+# 4. DISABLE ZRAM (Ubuntu 24.04 uses zram-generator)
+# ============================================
+- name: Check if zram-generator config exists
+  stat:
+    path: /etc/systemd/zram-generator.conf
+  register: zram_config
+
+- name: Check if zram-generator.conf.d exists
+  stat:
+    path: /usr/lib/systemd/zram-generator.conf
+  register: zram_lib_config
+
+- name: Disable zram by creating empty config (if zram-generator is used)
+  copy:
+    content: |
+      # Disabled for Kubernetes
+      # Empty file disables zram-generator
+    dest: /etc/systemd/zram-generator.conf
+    mode: '0644'
+    backup: yes
+  when: zram_lib_config.stat.exists or zram_config.stat.exists
+
+- name: Stop zram swap devices
+  shell: |
+    for zram in /dev/zram*; do
+      if [ -b "$zram" ]; then
+        swapoff "$zram" 2>/dev/null || true
+      fi
+    done
+  changed_when: false
+  failed_when: false
+
+# ============================================
+# 5. DISABLE swap.target IN SYSTEMD
+# ============================================
+- name: Mask swap.target to prevent swap activation
+  systemd:
+    name: swap.target
+    masked: yes
+  ignore_errors: yes
+
+# ============================================
+# 6. VERIFY SWAP IS DISABLED
+# ============================================
+- name: Verify swap is now disabled
+  command: swapon --show
+  register: swap_status_after
+  changed_when: false
+  failed_when: false
+
+- name: Check /proc/swaps
+  command: cat /proc/swaps
+  register: proc_swaps
+  changed_when: false
+
+- name: Display final swap status
+  debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════════════╗
+      ║                    SWAP CONFIGURATION RESULT                     ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Swap Status: {{ ('DISABLED ✓' if not swap_status_after.stdout else 'STILL ENABLED ⚠️') | center(49) }} ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Changes Applied:                                                 ║
+      ║   - swapoff -a executed                                          ║
+      ║   - /etc/fstab swap entries commented out                        ║
+      ║   - systemd swap units masked                                    ║
+      ║   - zram-generator disabled                                      ║
+      ║   - swap.target masked                                           ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ NOTE: Changes are persistent across reboots                      ║
+      ╚══════════════════════════════════════════════════════════════════╝
+
+- name: Fail if swap is still enabled
+  assert:
+    that:
+      - swap_status_after.stdout | length == 0
+    fail_msg: |
+      WARNING: Swap is still enabled!
+      Please check manually with: swapon --show
+      And review: /etc/fstab, systemctl list-units --type=swap
+    success_msg: "Swap has been successfully disabled"

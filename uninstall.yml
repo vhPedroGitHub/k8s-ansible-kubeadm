@@ -1,0 +1,8 @@
+---
+- name: Uninstall Ansible Playbook
+  hosts: 
+    - master_nodes
+    - worker_nodes
+  become: true
+  roles:
+    - role: kubeadm

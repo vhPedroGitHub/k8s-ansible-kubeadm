@@ -1,0 +1,332 @@
+---
+# Install and Configure containerd Container Runtime for Kubernetes
+# Based on: https://kubernetes.io/docs/setup/production-environment/container-runtimes/
+# Target OS: Ubuntu 24.04
+
+
+# ============================================
+# 1. INSTALL PREREQUISITES
+# ============================================
+- name: Install required packages
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+
+# ============================================
+# 2. CONFIGURE NETWORK PREREQUISITES
+# ============================================
+- name: Load required kernel modules
+  copy:
+    content: |
+      overlay
+      br_netfilter
+    dest: /etc/modules-load.d/k8s.conf
+    mode: '0644'
+
+- name: Load overlay module
+  modprobe:
+    name: overlay
+    state: present
+
+- name: Load br_netfilter module
+  modprobe:
+    name: br_netfilter
+    state: present
+
+- name: Configure sysctl for Kubernetes networking
+  copy:
+    content: |
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.ipv4.ip_forward                 = 1
+    dest: /etc/sysctl.d/k8s.conf
+    mode: '0644'
+
+- name: Apply sysctl settings
+  command: sysctl --system
+
+- name: Verify sysctl settings
+  shell: |
+    echo "=== Sysctl Settings ==="
+    sysctl net.bridge.bridge-nf-call-iptables
+    sysctl net.bridge.bridge-nf-call-ip6tables
+    sysctl net.ipv4.ip_forward
+  register: sysctl_verify
+  changed_when: false
+
+- name: Display sysctl verification
+  debug:
+    msg: "{{ sysctl_verify.stdout_lines }}"
+
+# ============================================
+# 3. INSTALL CONTAINERD
+# ============================================
+- name: Check if containerd binary exists
+  stat:
+    path: /usr/local/bin/containerd
+  register: containerd_exists
+
+- name: Get tar.gz for containerd
+  get_url:
+    url: "{{ kubeadmin.containerd.url_targz }}"
+    dest: /tmp/containerd.tar.gz
+    mode: '0644'
+  when: not containerd_exists.stat.exists
+
+- name: Extract containerd binaries
+  unarchive:
+    src: /tmp/containerd.tar.gz
+    dest: /usr/local
+    remote_src: yes
+    creates: /usr/local/bin/containerd
+  when: not containerd_exists.stat.exists
+
+- name: Check if containerd service file exists
+  stat:
+    path: /etc/systemd/system/containerd.service
+  register: containerd_service_exists
+
+- name: Create containerd systemd service file
+  get_url:
+    url: "https://raw.githubusercontent.com/containerd/containerd/main/containerd.service"
+    dest: /etc/systemd/system/containerd.service
+    mode: '0644'
+  when: not containerd_service_exists.stat.exists
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  when: not containerd_service_exists.stat.exists
+
+# ============================================
+# 3.1. INSTALL RUNC
+# ============================================
+- name: Check if runc binary exists
+  stat:
+    path: /usr/local/sbin/runc
+  register: runc_exists
+
+- name: Get runc binary
+  get_url:
+    url: "{{ kubeadmin.runc.url_binary }}"
+    dest: /tmp/runc.amd64
+    mode: '0755'
+  when: not runc_exists.stat.exists
+
+- name: Install runc binary
+  copy:
+    src: /tmp/runc.amd64
+    dest: /usr/local/sbin/runc
+    mode: '0755'
+    remote_src: yes
+  when: not runc_exists.stat.exists
+
+- name: Verify runc installation
+  command: /usr/local/sbin/runc --version
+  register: runc_version
+  changed_when: false
+
+- name: Display runc version
+  debug:
+    msg: "Runc installed: {{ runc_version.stdout_lines[0] }}"
+
+# ============================================
+# 3.2. INSTALL CNI PLUGINS
+# ============================================
+- name: Create CNI bin directory
+  file:
+    path: /opt/cni/bin
+    state: directory
+    mode: '0755'
+
+- name: Check if CNI plugins exist
+  stat:
+    path: /opt/cni/bin/bridge
+  register: cni_plugins_exist
+
+- name: Get CNI plugins tar.gz
+  get_url:
+    url: "{{ kubeadmin.cni_plugins.url_targz }}"
+    dest: /tmp/cni-plugins.tar.gz
+    mode: '0644'
+  when: not cni_plugins_exist.stat.exists
+
+- name: Extract CNI plugins to /opt/cni/bin
+  unarchive:
+    src: /tmp/cni-plugins.tar.gz
+    dest: /opt/cni/bin
+    remote_src: yes
+    creates: /opt/cni/bin/bridge
+  when: not cni_plugins_exist.stat.exists
+
+- name: Verify CNI plugins installation
+  find:
+    paths: /opt/cni/bin
+    file_type: file
+  register: cni_binaries
+
+- name: Display CNI plugins installed
+  debug:
+    msg: "CNI plugins installed: {{ cni_binaries.files | map(attribute='path') | map('basename') | list | sort | join(', ') }}"
+
+# ============================================
+# 4. CONFIGURE CONTAINERD DEFAULT SETTINGS
+# ============================================
+- name: Create containerd config directory
+  file:
+    path: /etc/containerd
+    state: directory
+    mode: '0755'
+
+- name: Generate default containerd configuration
+  shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+
+- name: Get containerd version raw
+  command: containerd --version
+  register: containerd_version_raw
+  changed_when: false
+
+- name: Display containerd raw version
+  debug:
+    msg: "containerd --version: {{ containerd_version_raw.stdout }}"
+
+- name: Parse containerd major version
+  set_fact:
+    containerd_major_version: "{{ (containerd_version_raw.stdout | regex_search('([0-9]+)\\.([0-9]+)\\.([0-9]+)', '\\1') | default('1')) }}"
+
+- name: Display containerd major version
+  debug:
+    msg: "Containerd major version: {{ containerd_major_version }}"
+
+# ============================================
+# 5. CONFIGURE SYSTEMD CGROUP DRIVER
+# ============================================
+- name: Configure systemd cgroup driver (containerd 1.x)
+  lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*SystemdCgroup\s*='
+    line: '            SystemdCgroup = true'
+    insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\.containerd\.runtimes\.runc\.options\]'
+    backup: yes
+  when: containerd_major_version == "1"
+  notify: restart containerd
+
+- name: Configure systemd cgroup driver (containerd 2.x)
+  lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*SystemdCgroup\s*='
+    line: '            SystemdCgroup = true'
+    insertafter: '^\s*\[plugins\.''io\.containerd\.cri\.v1\.runtime''\.containerd\.runtimes\.runc\.options\]'
+    backup: yes
+  when: containerd_major_version != "1"
+  notify: restart containerd
+
+# ============================================
+# 6. CONFIGURE SANDBOX (PAUSE) IMAGE
+# ============================================
+- name: Configure sandbox image for Kubernetes
+  lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^\s*sandbox_image\s*='
+    line: '    sandbox_image = "registry.k8s.io/pause:3.10"'
+    insertafter: '^\s*\[plugins\."io\.containerd\.grpc\.v1\.cri"\]'
+    backup: yes
+  notify: restart containerd
+
+# ============================================
+# 7. ENABLE AND START CONTAINERD
+# ============================================
+- name: Enable containerd service
+  systemd:
+    name: containerd
+    enabled: yes
+
+- block:
+    - name: Start containerd service
+      systemd:
+        name: containerd
+        state: started
+  rescue:
+    - name: Get containerd service status
+      command: systemctl status containerd --no-pager
+      register: containerd_status_failed
+      changed_when: false
+
+    - name: Get containerd journal logs
+      command: journalctl -xeu containerd --no-pager --since "-10min"
+      register: containerd_journal_failed
+      changed_when: false
+
+    - name: Show containerd failure diagnostics
+      debug:
+        msg: |
+          Service start failed. Status:
+          {{ containerd_status_failed.stdout }}
+          ----
+          Journal:
+          {{ containerd_journal_failed.stdout }}
+      failed_when: true
+
+- name: Wait for containerd socket
+  wait_for:
+    path: /run/containerd/containerd.sock
+    timeout: 30
+
+# ============================================
+# 8. VERIFY INSTALLATION
+# ============================================
+- name: Check containerd service status
+  systemd:
+    name: containerd
+  register: containerd_status
+
+- name: Verify containerd is running
+  command: systemctl is-active containerd
+  register: containerd_active
+  changed_when: false
+
+- name: Check containerd socket
+  stat:
+    path: /run/containerd/containerd.sock
+  register: containerd_socket
+
+- name: Test containerd with ctr command
+  command: ctr version
+  register: ctr_version
+  changed_when: false
+  failed_when: false
+
+# ============================================
+# 9. DISPLAY INSTALLATION SUMMARY
+# ============================================
+- name: Generate installation summary
+  debug:
+    msg: |
+      
+      ╔══════════════════════════════════════════════════════════════════╗
+      ║            CONTAINERD INSTALLATION SUMMARY                       ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Status: {{ ('SUCCESSFUL ✓' if containerd_active.stdout == 'active' else 'FAILED ⚠️') | center(55) }} ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Containerd Version: {{ containerd_major_version | center(42) }} ║
+      ║ Service Status: {{ containerd_active.stdout | center(47) }} ║
+      ║ CRI Socket: {{ ('/run/containerd/containerd.sock EXISTS' if containerd_socket.stat.exists else 'NOT FOUND') | center(47) }} ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Configuration Applied:                                           ║
+      ║   ✓ SystemdCgroup = true                                         ║
+      ║   ✓ Kernel modules loaded (overlay, br_netfilter)                ║
+      ║   ✓ Sysctl parameters configured                                 ║
+      ║   ✓ Sandbox image: registry.k8s.io/pause:3.10                    ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Next Steps:                                                      ║
+      ║   1. Install kubeadm, kubelet, and kubectl                       ║
+      ║   2. Initialize Kubernetes cluster with kubeadm                  ║
+      ╚══════════════════════════════════════════════════════════════════╝

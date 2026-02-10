@@ -1,0 +1,66 @@
+---
+- name: Delete Multus CNI
+  kubernetes.core.k8s:
+    state: absent
+    src: https://raw.githubusercontent.com/k8snetworkplumbingwg/multus-cni/master/deployments/multus-daemonset.yml
+  environment:
+    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+  ignore_errors: yes
+  when: inventory_hostname in groups['master_nodes']
+
+- name: Delete local path provisioner
+  kubernetes.core.k8s:
+    state: absent
+    src: https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+  environment:
+    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+  ignore_errors: yes
+  when: inventory_hostname in groups['master_nodes']
+
+- name: Delete Calico custom resources
+  kubernetes.core.k8s:
+    state: absent
+    src: https://raw.githubusercontent.com/projectcalico/calico/v3.31.2/manifests/custom-resources.yaml
+  environment:
+    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+  ignore_errors: yes
+  when: inventory_hostname in groups['master_nodes']
+
+- name: Delete Calico Tigera Operator
+  kubernetes.core.k8s:
+    state: absent
+    src: https://raw.githubusercontent.com/projectcalico/calico/v3.31.2/manifests/tigera-operator.yaml
+  environment:
+    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+  ignore_errors: yes
+  when: inventory_hostname in groups['master_nodes']
+
+- name: Reset kubeadm on all nodes
+  become: yes
+  command: kubeadm reset --force
+  ignore_errors: yes
+
+- name: Remove .kube directory
+  file:
+    path: "{{ ansible_user_dir }}/.kube"
+    state: absent
+
+- name: Clean up iptables rules
+  become: yes
+  shell: |
+    iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+  ignore_errors: yes
+
+- name: Remove CNI networks
+  become: yes
+  file:
+    path: /etc/cni/net.d
+    state: absent
+  ignore_errors: yes
+
+- name: Restart containerd
+  become: yes
+  systemd:
+    name: containerd
+    state: restarted
+  ignore_errors: yes

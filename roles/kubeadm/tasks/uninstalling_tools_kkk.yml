@@ -1,0 +1,112 @@
+---
+# Uninstall kubeadm, kubelet, kubectl, and crictl
+
+# ============================================
+# 1. STOP AND DISABLE KUBELET SERVICE
+# ============================================
+- name: Stop kubelet service
+  systemd:
+    name: kubelet
+    state: stopped
+  ignore_errors: yes
+
+- name: Disable kubelet service
+  systemd:
+    name: kubelet
+    enabled: no
+  ignore_errors: yes
+
+# ============================================
+# 2. REMOVE KUBELET SERVICE FILES
+# ============================================
+- name: Remove kubelet systemd service file
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/lib/systemd/system/kubelet.service
+    - /usr/lib/systemd/system/kubelet.service.d
+
+- name: Remove kubelet configuration
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /var/lib/kubelet
+    - /etc/kubernetes
+
+# ============================================
+# 3. REMOVE KUBERNETES BINARIES
+# ============================================
+- name: Remove Kubernetes binaries
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/kubeadm
+    - /usr/local/bin/kubelet
+    - /usr/local/bin/kubectl
+    - /usr/local/bin/crictl
+
+# ============================================
+# 4. CLEANUP TEMPORARY FILES
+# ============================================
+- name: Remove temporary service files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/kubelet.service
+    - /tmp/10-kubeadm.conf
+
+# ============================================
+# 5. RELOAD SYSTEMD
+# ============================================
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+# ============================================
+# 6. DISPLAY UNINSTALL SUMMARY
+# ============================================
+- name: Verify kubeadm is removed
+  command: which kubeadm
+  register: kubeadm_check
+  changed_when: false
+  failed_when: false
+
+- name: Verify kubelet is removed
+  command: which kubelet
+  register: kubelet_check
+  changed_when: false
+  failed_when: false
+
+- name: Verify kubectl is removed
+  command: which kubectl
+  register: kubectl_check
+  changed_when: false
+  failed_when: false
+
+- name: Verify crictl is removed
+  command: which crictl
+  register: crictl_check
+  changed_when: false
+  failed_when: false
+
+- name: Generate uninstall summary
+  debug:
+    msg: |
+      
+      ╔══════════════════════════════════════════════════════════════════╗
+      ║        KUBERNETES TOOLS UNINSTALLATION SUMMARY                   ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Removed Components:                                              ║
+      ║   - kubeadm: {{ ('✓' if kubeadm_check.rc != 0 else '⚠️') | center(49) }} ║
+      ║   - kubelet: {{ ('✓' if kubelet_check.rc != 0 else '⚠️') | center(49) }} ║
+      ║   - kubectl: {{ ('✓' if kubectl_check.rc != 0 else '⚠️') | center(49) }} ║
+      ║   - crictl: {{ ('✓' if crictl_check.rc != 0 else '⚠️') | center(50) }} ║
+      ║   - kubelet service                                              ║
+      ║   - Kubernetes configuration                                     ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Status: {{ ('SUCCESSFUL ✓' if (kubeadm_check.rc != 0 and kubelet_check.rc != 0 and kubectl_check.rc != 0) else 'INCOMPLETE ⚠️') | center(55) }} ║
+      ╚══════════════════════════════════════════════════════════════════╝

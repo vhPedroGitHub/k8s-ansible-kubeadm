@@ -1,0 +1,306 @@
+---
+# ============================================
+# 1. CHECK OS VERSION AND DISTRIBUTION
+# ============================================
+- name: Display OS information
+  debug:
+    msg: |
+      OS Family: {{ ansible_os_family }}
+      Distribution: {{ ansible_distribution }}
+      Distribution Version: {{ ansible_distribution_version }}
+      Distribution Release: {{ ansible_distribution_release }}
+
+- name: Check if OS family is supported
+  assert:
+    that:
+      - ansible_os_family in kubeadmin.supported_os_families
+    fail_msg: |
+      Unsupported OS family: {{ ansible_os_family }}
+      Supported OS families: {{ kubeadmin.supported_os_families | join(', ') }}
+    success_msg: "OS family {{ ansible_os_family }} is supported"
+
+# ============================================
+# 2. CHECK KERNEL VERSION (LTS recommended)
+# ============================================
+- name: Get kernel version
+  command: uname -r
+  register: kernel_version
+  changed_when: false
+
+- name: Display kernel version
+  debug:
+    msg: "Current kernel version: {{ kernel_version.stdout }}"
+
+- name: Check kernel version is reasonable (>= 4.x)
+  assert:
+    that:
+      - kernel_version.stdout is regex('^[4-9]\.|^[1-9][0-9]+\.')
+    fail_msg: "Kernel version {{ kernel_version.stdout }} may be too old. LTS kernels are recommended."
+    success_msg: "Kernel version {{ kernel_version.stdout }} appears acceptable"
+
+# ============================================
+# 3. CHECK MEMORY REQUIREMENTS
+# ============================================
+- name: Check available memory
+  assert:
+    that:
+      - ansible_memtotal_mb >= kubeadmin.min_memory_mb
+    fail_msg: |
+      Insufficient memory: {{ ansible_memtotal_mb }} MB
+      Minimum required: {{ kubeadmin.min_memory_mb }} MB (2 GB)
+    success_msg: "Memory check passed: {{ ansible_memtotal_mb }} MB available"
+
+# ============================================
+# 4. CHECK CPU REQUIREMENTS (for control plane)
+# ============================================
+- name: Check CPU count
+  debug:
+    msg: "CPU count: {{ ansible_processor_vcpus }}"
+
+- name: Warn if CPU count is low for control plane
+  debug:
+    msg: |
+      WARNING: This node has {{ ansible_processor_vcpus }} CPU(s).
+      Control plane nodes require at least {{ kubeadmin.min_cpus }} CPUs.
+  when: ansible_processor_vcpus < kubeadmin.min_cpus
+
+# ============================================
+# 5. CHECK UNIQUE IDENTIFIERS
+# ============================================
+- name: Get MAC addresses
+  shell: ip link | grep -A1 'state UP' | grep link/ether | awk '{print $2}' | head -1
+  register: mac_address
+  changed_when: false
+  failed_when: false
+
+- name: Display MAC address
+  debug:
+    msg: "Primary MAC address: {{ mac_address.stdout | default('Not found') }}"
+
+- name: Get product_uuid
+  command: cat /sys/class/dmi/id/product_uuid
+  register: product_uuid
+  changed_when: false
+  failed_when: false
+
+- name: Display product_uuid
+  debug:
+    msg: "Product UUID: {{ product_uuid.stdout | default('Not available') }}"
+
+- name: Warn if product_uuid is not available
+  debug:
+    msg: "WARNING: Could not read product_uuid. Ensure unique identifiers for each node."
+  when: product_uuid.rc != 0
+
+# ============================================
+# 6. CHECK HOSTNAME
+# ============================================
+- name: Get hostname
+  command: hostname
+  register: node_hostname
+  changed_when: false
+
+- name: Display hostname
+  debug:
+    msg: "Hostname: {{ node_hostname.stdout }}"
+
+- name: Check hostname is not localhost
+  assert:
+    that:
+      - node_hostname.stdout != 'localhost'
+      - node_hostname.stdout != 'localhost.localdomain'
+    fail_msg: "Hostname should not be 'localhost'. Set a unique hostname for this node."
+    success_msg: "Hostname '{{ node_hostname.stdout }}' is valid"
+
+# ============================================
+# 7. CHECK SWAP CONFIGURATION
+# ============================================
+- name: Check if swap is enabled
+  command: swapon --show
+  register: swap_status
+  changed_when: false
+  failed_when: false
+
+- name: Display swap status
+  debug:
+    msg: "{{ 'Swap is ENABLED - should be disabled for Kubernetes' if swap_status.stdout else 'Swap is disabled - OK' }}"
+
+- name: Get swap total from /proc/meminfo
+  shell: grep SwapTotal /proc/meminfo | awk '{print $2}'
+  register: swap_total
+  changed_when: false
+
+- name: Warn if swap is enabled
+  debug:
+    msg: |
+      WARNING: Swap is enabled on this system.
+      Kubernetes requires swap to be disabled or kubelet configured with failSwapOn: false
+      To disable swap: sudo swapoff -a
+      To disable permanently: Comment out swap entries in /etc/fstab
+  when: swap_status.stdout | length > 0
+
+# ============================================
+# 8. CHECK NETWORK CONNECTIVITY
+# ============================================
+- name: Get default network interface
+  shell: ip route | grep default | awk '{print $5}' | head -1
+  register: default_interface
+  changed_when: false
+
+- name: Display default interface
+  debug:
+    msg: "Default network interface: {{ default_interface.stdout }}"
+
+- name: Get IP address of default interface
+  shell: ip -4 addr show {{ default_interface.stdout }} | grep -oP '(?<=inet\s)\d+(\.\d+){3}'
+  register: node_ip
+  changed_when: false
+  when: default_interface.stdout | length > 0
+
+- name: Display node IP
+  debug:
+    msg: "Node IP address: {{ node_ip.stdout | default('Not found') }}"
+
+# ============================================
+# 9. CHECK REQUIRED PORTS (using ss or netstat)
+# ============================================
+- name: Check if port 6443 is available (API server)
+  shell: ss -tlnp | grep ':6443 ' || echo "Port 6443 is available"
+  register: port_6443
+  changed_when: false
+
+- name: Display port 6443 status
+  debug:
+    msg: "{{ port_6443.stdout }}"
+
+# ============================================
+# 10. CHECK CONTAINER RUNTIME
+# ============================================
+- name: Check for containerd
+  stat:
+    path: /var/run/containerd/containerd.sock
+  register: containerd_socket
+
+- name: Check for CRI-O
+  stat:
+    path: /var/run/crio/crio.sock
+  register: crio_socket
+
+- name: Check for Docker with cri-dockerd
+  stat:
+    path: /var/run/cri-dockerd.sock
+  register: cri_dockerd_socket
+
+- name: Display container runtime status
+  debug:
+    msg: |
+      Container Runtime Status:
+      - containerd: {{ 'FOUND' if containerd_socket.stat.exists else 'NOT FOUND' }}
+      - CRI-O: {{ 'FOUND' if crio_socket.stat.exists else 'NOT FOUND' }}
+      - cri-dockerd: {{ 'FOUND' if cri_dockerd_socket.stat.exists else 'NOT FOUND' }}
+
+- name: Warn if no container runtime found
+  debug:
+    msg: |
+      WARNING: No container runtime detected!
+      You must install one of:
+      - containerd (recommended)
+      - CRI-O
+      - Docker Engine with cri-dockerd
+  when:
+    - not containerd_socket.stat.exists
+    - not crio_socket.stat.exists
+    - not cri_dockerd_socket.stat.exists
+
+# ============================================
+# 11. CHECK REQUIRED KERNEL MODULES
+# ============================================
+- name: Check required kernel modules
+  shell: |
+    echo "=== Kernel Modules Status ==="
+    for mod in br_netfilter overlay ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh nf_conntrack; do
+      if lsmod | grep -q "^$mod"; then
+        echo "$mod: LOADED"
+      else
+        echo "$mod: NOT LOADED"
+      fi
+    done
+  register: kernel_modules
+  changed_when: false
+
+- name: Display kernel modules status
+  debug:
+    msg: "{{ kernel_modules.stdout_lines }}"
+
+# ============================================
+# 12. CHECK SYSCTL SETTINGS
+# ============================================
+- name: Check net.bridge.bridge-nf-call-iptables
+  command: sysctl net.bridge.bridge-nf-call-iptables
+  register: bridge_nf_call_iptables
+  changed_when: false
+  failed_when: false
+
+- name: Check net.ipv4.ip_forward
+  command: sysctl net.ipv4.ip_forward
+  register: ip_forward
+  changed_when: false
+  failed_when: false
+
+- name: Display sysctl settings
+  debug:
+    msg: |
+      Sysctl Settings:
+      - {{ bridge_nf_call_iptables.stdout | default('net.bridge.bridge-nf-call-iptables: Not set') }}
+      - {{ ip_forward.stdout | default('net.ipv4.ip_forward: Not set') }}
+
+# ============================================
+# 13. CHECK EXISTING KUBERNETES INSTALLATION
+# ============================================
+- name: Check if kubeadm is installed
+  command: which kubeadm
+  register: kubeadm_installed
+  changed_when: false
+  failed_when: false
+
+- name: Check if kubectl is installed
+  command: which kubectl
+  register: kubectl_installed
+  changed_when: false
+  failed_when: false
+
+- name: Check if kubelet is installed
+  command: which kubelet
+  register: kubelet_installed
+  changed_when: false
+  failed_when: false
+
+- name: Display Kubernetes tools status
+  debug:
+    msg: |
+      Kubernetes Tools:
+      - kubeadm: {{ 'INSTALLED at ' + kubeadm_installed.stdout if kubeadm_installed.rc == 0 else 'NOT INSTALLED' }}
+      - kubectl: {{ 'INSTALLED at ' + kubectl_installed.stdout if kubectl_installed.rc == 0 else 'NOT INSTALLED' }}
+      - kubelet: {{ 'INSTALLED at ' + kubelet_installed.stdout if kubelet_installed.rc == 0 else 'NOT INSTALLED' }}
+
+# ============================================
+# 14. GENERATE SUMMARY REPORT
+# ============================================
+- name: Generate prerequisites summary
+  debug:
+    msg: |
+      
+      ╔══════════════════════════════════════════════════════════════════╗
+      ║             KUBEADM PREREQUISITES CHECK SUMMARY                  ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Host: {{ inventory_hostname | center(56) }} ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ OS: {{ (ansible_distribution + ' ' + ansible_distribution_version) | center(58) }} ║
+      ║ Kernel: {{ kernel_version.stdout | center(54) }} ║
+      ║ Memory: {{ (ansible_memtotal_mb | string + ' MB') | center(54) }} ║
+      ║ CPUs: {{ (ansible_processor_vcpus | string) | center(56) }} ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Swap: {{ ('ENABLED ⚠️' if swap_status.stdout else 'Disabled ✓') | center(56) }} ║
+      ║ Container Runtime: {{ ('Found ✓' if (containerd_socket.stat.exists or crio_socket.stat.exists or cri_dockerd_socket.stat.exists) else 'NOT FOUND ⚠️') | center(42) }} ║
+      ║ Kubernetes Tools: {{ ('Installed' if kubeadm_installed.rc == 0 else 'Not installed') | center(43) }} ║
+      ╚══════════════════════════════════════════════════════════════════╝

@@ -1,0 +1,49 @@
+# Minimum requirements
+kubeadmin:
+  min_memory_mb: 2048
+  min_cpus: 2
+  # Required ports for control plane
+  control_plane_ports:
+    - { port: 6443, desc: "Kubernetes API server" }
+    - { port: 2379, desc: "etcd client" }
+    - { port: 2380, desc: "etcd peer" }
+    - { port: 10250, desc: "Kubelet API" }
+    - { port: 10259, desc: "kube-scheduler" }
+    - { port: 10257, desc: "kube-controller-manager" }
+  # Required ports for worker nodes
+  worker_ports:
+    - { port: 10250, desc: "Kubelet API" }
+    - { port: 10256, desc: "kube-proxy" }
+    - { port: "30000:32767", desc: "NodePort Services" }
+  # Supported OS families
+  supported_os_families:
+    - Debian
+    - RedHat
+    - Rocky
+
+  kubernetes:
+    version: "v1.34.0"
+    
+  containerd:
+    version: "2.2.0"
+    config_path: "/etc/containerd/config.toml"
+    cri_plugin: "io.containerd.grpc.v1.cri"
+    url_targz: "https://github.com/containerd/containerd/releases/download/v2.2.0/containerd-2.2.0-linux-amd64.tar.gz"
+  
+  runc:
+    version: "v1.4.0"
+    url_binary: "https://github.com/opencontainers/runc/releases/download/v1.4.0/runc.amd64"
+
+  cni_plugins:
+    version: "v1.8.0"
+    url_targz: "https://github.com/containernetworking/plugins/releases/download/v1.8.0/cni-plugins-linux-amd64-v1.8.0.tgz"
+
+  crictl:
+    version: "v1.34.0"
+    url_targz: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.34.0/crictl-v1.34.0-linux-amd64.tar.gz"
+  
+  kubeadm:
+    version: "v0.16.2"
+
+  kubelet:
+    version: "v0.16.2"

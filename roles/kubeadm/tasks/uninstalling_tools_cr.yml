@@ -1,0 +1,144 @@
+---
+# Uninstall containerd Container Runtime and related components
+# Target OS: Ubuntu 24.04
+
+# ============================================
+# 1. STOP AND DISABLE CONTAINERD SERVICE
+# ============================================
+- name: Stop containerd service
+  systemd:
+    name: containerd
+    state: stopped
+  ignore_errors: yes
+
+- name: Disable containerd service
+  systemd:
+    name: containerd
+    enabled: no
+  ignore_errors: yes
+
+# ============================================
+# 2. REMOVE CONTAINERD BINARIES
+# ============================================
+- name: Remove containerd binaries
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /usr/local/bin/containerd
+    - /usr/local/bin/containerd-shim
+    - /usr/local/bin/containerd-shim-runc-v1
+    - /usr/local/bin/containerd-shim-runc-v2
+    - /usr/local/bin/ctr
+    - /usr/local/bin/containerd-stress
+
+- name: Remove containerd systemd service file
+  file:
+    path: /etc/systemd/system/containerd.service
+    state: absent
+
+- name: Remove containerd configuration
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/containerd
+    - /var/lib/containerd
+    - /run/containerd
+
+# ============================================
+# 3. REMOVE RUNC
+# ============================================
+- name: Remove runc binary
+  file:
+    path: /usr/local/sbin/runc
+    state: absent
+
+# ============================================
+# 4. REMOVE CNI PLUGINS
+# ============================================
+- name: Remove CNI plugins directory
+  file:
+    path: /opt/cni
+    state: absent
+
+# ============================================
+# 5. CLEANUP NETWORK CONFIGURATION
+# ============================================
+- name: Remove kernel modules configuration
+  file:
+    path: /etc/modules-load.d/k8s.conf
+    state: absent
+
+- name: Remove sysctl configuration for Kubernetes
+  file:
+    path: /etc/sysctl.d/k8s.conf
+    state: absent
+
+- name: Unload kernel modules
+  modprobe:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - br_netfilter
+    - overlay
+  ignore_errors: yes
+
+- name: Apply sysctl settings
+  command: sysctl --system
+  changed_when: false
+
+# ============================================
+# 6. CLEANUP TEMPORARY FILES
+# ============================================
+- name: Remove temporary installation files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/containerd.tar.gz
+    - /tmp/runc.amd64
+    - /tmp/cni-plugins.tar.gz
+
+# ============================================
+# 7. RELOAD SYSTEMD
+# ============================================
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+
+# ============================================
+# 8. DISPLAY UNINSTALL SUMMARY
+# ============================================
+- name: Verify containerd is removed
+  command: which containerd
+  register: containerd_check
+  changed_when: false
+  failed_when: false
+
+- name: Verify runc is removed
+  command: which runc
+  register: runc_check
+  changed_when: false
+  failed_when: false
+
+- name: Generate uninstall summary
+  debug:
+    msg: |
+      
+      ╔══════════════════════════════════════════════════════════════════╗
+      ║          CONTAINERD UNINSTALLATION SUMMARY                       ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Status: {{ ('SUCCESSFUL ✓' if containerd_check.rc != 0 else 'INCOMPLETE ⚠️') | center(55) }} ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Removed Components:                                              ║
+      ║   - containerd binaries: {{ ('✓' if containerd_check.rc != 0 else '⚠️') | center(34) }} ║
+      ║   - runc binary: {{ ('✓' if runc_check.rc != 0 else '⚠️') | center(43) }} ║
+      ║   - CNI plugins                                                  ║
+      ║   - containerd service                                           ║
+      ║   - Configuration files                                          ║
+      ║   - Kernel modules config                                        ║
+      ║   - Sysctl parameters                                            ║
+      ╠══════════════════════════════════════════════════════════════════╣
+      ║ Note: Container images and volumes have been removed             ║
+      ╚══════════════════════════════════════════════════════════════════╝
