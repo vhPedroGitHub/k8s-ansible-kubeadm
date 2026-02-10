@@ -81,7 +81,23 @@
     KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
   when: inventory_hostname in groups['master_nodes']
 
-- name: Apply Calico Tigera Operator manifest
+- name: Get Calico Operator manifest
+  uri:
+    url: https://raw.githubusercontent.com/projectcalico/calico/v3.31.2/manifests/operator-crds.yaml
+    method: GET
+    return_content: yes
+  register: operator_manifest
+  when: inventory_hostname in groups['master_nodes']
+
+- name: Create Calico Operator
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ operator_manifest.content | from_yaml_all | list }}"
+  environment:
+    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
+  when: inventory_hostname in groups['master_nodes']
+
+- name: Get Calico Tigera Operator manifest
   uri:
     url: https://raw.githubusercontent.com/projectcalico/calico/v3.31.2/manifests/tigera-operator.yaml
     method: GET
