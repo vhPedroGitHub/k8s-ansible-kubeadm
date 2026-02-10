@@ -23,18 +23,3 @@
   pause:
     seconds: 30
   when: inventory_hostname in groups['worker_nodes']
-
-- name: Label worker nodes with Aether role
-  kubernetes.core.k8s:
-    state: present
-    definition:
-      apiVersion: v1
-      kind: Node
-      metadata:
-        name: "{{ inventory_hostname }}"
-        labels:
-          node-role.aetherproject.org: omec-upf
-  environment:
-    KUBECONFIG: "{{ ansible_user_dir }}/.kube/config"
-  delegate_to: "{{ groups['master_nodes'][0] }}"
-  when: inventory_hostname in groups['worker_nodes']
