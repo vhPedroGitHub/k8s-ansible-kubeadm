@@ -3,10 +3,10 @@
 # UNINSTALLATION TASKS
 # ============================================
 - name: Include kubeadmin uninstallation tasks for container runtime
-  include_tasks: uninstalling_tools_cr.yml
+  import_tasks: uninstalling_tools_cr.yml
 
 - name: Include kubeadmin uninstallation tasks for kubeadm, kubelet, and kubectl
-  include_tasks: uninstalling_tools_kkk.yml
+  import_tasks: uninstalling_tools_kkk.yml
 
 - name: Include Task to restore swap (optional)
-  include_tasks: restore_swap.yml
+  import_tasks: restore_swap.yml

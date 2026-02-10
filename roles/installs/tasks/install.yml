@@ -3,13 +3,13 @@
 # INSTALLATION TASKS
 # ============================================
 - name: Include task to check requirements in the nodes
-  include_tasks: check_nodes.yml
+  import_tasks: check_nodes.yml
 
 - name: Include Task for swap config
-  include_tasks: config_nodes_swap.yml
+  import_tasks: config_nodes_swap.yml
 
 - name: Include kubeadmin installation tasks for kubeadm, kubelet, and kubectl
-  include_tasks: installing_tools_kkk.yml
+  import_tasks: installing_tools_kkk.yml
 
 - name: Include kubeadmin installation tasks for container runtime
-  include_tasks: installing_tools_cr.yml
+  import_tasks: installing_tools_cr.yml
