@@ -13,9 +13,19 @@
 
 - name: Get latest Kubernetes release version
   ansible.builtin.uri:
-    url: https://dl.k8s.io/release/{{stable.txt}}
+    url: https://dl.k8s.io/release/stable.txt
     return_content: yes
   register: k8s_release
+  when: kubeadmin.kubernetes.version is not defined
+
+- name: Set Kubernetes version fact (from config)
+  ansible.builtin.set_fact:
+    k8s_version: "{{ kubeadmin.kubernetes.version }}"
+  when: kubeadmin.kubernetes.version is defined
+
+- name: Set Kubernetes version fact (from download)
+  ansible.builtin.set_fact:
+    k8s_version: "{{ k8s_release.content | trim }}"
   when: kubeadmin.kubernetes.version is not defined
 
 - name: Check if kubeadm exists
@@ -25,7 +35,7 @@
 
 - name: Download kubeadm binary
   ansible.builtin.get_url:
-    url: "https://dl.k8s.io/release/{{ k8s_release.content | trim | default(kubeadmin.kubernetes.version) }}/bin/linux/amd64/kubeadm"
+    url: "https://dl.k8s.io/release/{{ k8s_version }}/bin/linux/amd64/kubeadm"
     dest: /usr/local/bin/kubeadm
     mode: '0755'
   when: not kubeadm_exists.stat.exists
@@ -37,7 +47,7 @@
 
 - name: Download kubelet binary
   ansible.builtin.get_url:
-    url: "https://dl.k8s.io/release/{{ k8s_release.content | trim | default(kubeadmin.kubernetes.version) }}/bin/linux/amd64/kubelet"
+    url: "https://dl.k8s.io/release/{{ k8s_version }}/bin/linux/amd64/kubelet"
     dest: /usr/local/bin/kubelet
     mode: '0755'
   when: not kubelet_exists.stat.exists
@@ -49,7 +59,7 @@
 
 - name: Download kubectl binary
   ansible.builtin.get_url:
-    url: "https://dl.k8s.io/release/{{ k8s_release.content | trim | default(kubeadmin.kubernetes.version) }}/bin/linux/amd64/kubectl"
+    url: "https://dl.k8s.io/release/{{ k8s_version }}/bin/linux/amd64/kubectl"
     dest: /usr/local/bin/kubectl
     mode: '0755'
   when: not kubectl_exists.stat.exists

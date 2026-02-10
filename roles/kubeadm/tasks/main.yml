@@ -1,11 +1,6 @@
 ---
 # Main task file for kubeadmin role
 # This file orchestrates the execution of different tasks based on tags
-
-- name: Init install
-  import_tasks: roles/kubeadm/tasks/install.yml
-  tags: install
-
 - name: Init kubeadmin setup
   import_tasks: roles/kubeadm/tasks/kubeadmin.yml
   tags: kubeadmin
@@ -26,7 +21,3 @@
 - name: Remove worker nodes
   import_tasks: roles/kubeadm/tasks/remove_worker_nodes.yml
   tags: remove-workers
-
-- name: Init uninstall
-  import_tasks: roles/kubeadm/tasks/uninstall.yml
-  tags: uninstall

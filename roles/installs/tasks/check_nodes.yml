@@ -255,6 +255,80 @@
       - {{ ip_forward.stdout | default('net.ipv4.ip_forward: Not set') }}
 
 # ============================================
+# 12.1 ENABLE IP FORWARDING ON UBUNTU
+# ============================================
+- name: Check and enable IP forwarding on Ubuntu
+  block:
+    - name: Get current IPv4 forwarding status
+      command: sysctl -n net.ipv4.ip_forward
+      register: ipv4_forward_status
+      changed_when: false
+
+    - name: Get current IPv6 forwarding status
+      command: sysctl -n net.ipv6.conf.all.forwarding
+      register: ipv6_forward_status
+      changed_when: false
+      failed_when: false
+
+    - name: Display current IP forwarding status
+      debug:
+        msg: |
+          IP Forwarding Status:
+          - IPv4 forwarding: {{ 'ENABLED ✓' if ipv4_forward_status.stdout == '1' else 'DISABLED ⚠️' }}
+          - IPv6 forwarding: {{ 'ENABLED ✓' if ipv6_forward_status.stdout == '1' else 'DISABLED ⚠️' }}
+
+    - name: Enable IPv4 forwarding if disabled
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+      when: ipv4_forward_status.stdout != '1'
+      become: yes
+
+    - name: Enable IPv6 forwarding if disabled
+      sysctl:
+        name: net.ipv6.conf.all.forwarding
+        value: '1'
+        sysctl_set: yes
+        state: present
+        reload: yes
+      when: ipv6_forward_status.stdout != '1'
+      become: yes
+
+    - name: Ensure IP forwarding is persistent in /etc/sysctl.conf
+      lineinfile:
+        path: /etc/sysctl.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        create: yes
+      loop:
+        - { regexp: '^net\.ipv4\.ip_forward', line: 'net.ipv4.ip_forward = 1' }
+        - { regexp: '^net\.ipv6\.conf\.all\.forwarding', line: 'net.ipv6.conf.all.forwarding = 1' }
+      become: yes
+
+    - name: Verify IPv4 forwarding is now enabled
+      command: sysctl -n net.ipv4.ip_forward
+      register: ipv4_verify
+      changed_when: false
+
+    - name: Verify IPv6 forwarding is now enabled
+      command: sysctl -n net.ipv6.conf.all.forwarding
+      register: ipv6_verify
+      changed_when: false
+      failed_when: false
+
+    - name: Display verification results
+      debug:
+        msg: |
+          IP Forwarding Verification:
+          - IPv4 forwarding: {{ 'ENABLED ✓' if ipv4_verify.stdout == '1' else 'FAILED ❌' }}
+          - IPv6 forwarding: {{ 'ENABLED ✓' if ipv6_verify.stdout == '1' else 'FAILED ❌' }}
+
+  when: ansible_distribution == 'Ubuntu'
+
+# ============================================
 # 13. CHECK EXISTING KUBERNETES INSTALLATION
 # ============================================
 - name: Check if kubeadm is installed
@@ -304,3 +378,5 @@
       ║ Container Runtime: {{ ('Found ✓' if (containerd_socket.stat.exists or crio_socket.stat.exists or cri_dockerd_socket.stat.exists) else 'NOT FOUND ⚠️') | center(42) }} ║
       ║ Kubernetes Tools: {{ ('Installed' if kubeadm_installed.rc == 0 else 'Not installed') | center(43) }} ║
       ╚══════════════════════════════════════════════════════════════════╝
+
+- 

@@ -1,0 +1,11 @@
+---
+# Main task file for kubeadmin role
+# This file orchestrates the execution of different tasks based on tags
+
+- name: Init install
+  import_tasks: roles/installs/tasks/install.yml
+  tags: install
+
+- name: Init uninstall
+  import_tasks: roles/installs/tasks/uninstall.yml
+  tags: uninstall
