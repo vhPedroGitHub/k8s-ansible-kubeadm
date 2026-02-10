@@ -129,20 +129,20 @@
 - name: Display final swap status
   debug:
     msg: |
-      ╔══════════════════════════════════════════════════════════════════╗
-      ║                    SWAP CONFIGURATION RESULT                     ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Swap Status: {{ ('DISABLED ✓' if not swap_status_after.stdout else 'STILL ENABLED ⚠️') | center(49) }} ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Changes Applied:                                                 ║
-      ║   - swapoff -a executed                                          ║
-      ║   - /etc/fstab swap entries commented out                        ║
-      ║   - systemd swap units masked                                    ║
-      ║   - zram-generator disabled                                      ║
-      ║   - swap.target masked                                           ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ NOTE: Changes are persistent across reboots                      ║
-      ╚══════════════════════════════════════════════════════════════════╝
+      ===============================================
+      SWAP CONFIGURATION RESULT
+      ===============================================
+      Swap Status: {{ 'DISABLED' if not swap_status_after.stdout else 'STILL ENABLED (warning)' }}
+      
+      Changes Applied:
+        - swapoff -a executed
+        - /etc/fstab swap entries commented out
+        - systemd swap units masked
+        - zram-generator disabled
+        - swap.target masked
+      
+      NOTE: Changes are persistent across reboots
+      ===============================================
 
 - name: Fail if swap is still enabled
   assert:

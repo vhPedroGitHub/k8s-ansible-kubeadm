@@ -1,7 +1,7 @@
 # Minimum requirements
 kubeadmin:
-  min_memory_mb: 2048
-  min_cpus: 2
+  min_memory_mb: 1900
+  min_cpus: 1
   # Required ports for control plane
   control_plane_ports:
     - { port: 6443, desc: "Kubernetes API server" }

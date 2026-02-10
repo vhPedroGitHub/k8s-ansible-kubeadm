@@ -95,20 +95,21 @@
   debug:
     msg: |
       
-      ╔══════════════════════════════════════════════════════════════════╗
-      ║                   SWAP RESTORATION SUMMARY                       ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Swap Status: {{ ('ENABLED ✓' if swap_status.stdout else 'DISABLED') | center(49) }} ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Actions Taken:                                                   ║
-      ║   - Unmasked swap.target                                         ║
-      ║   - Unmasked swap units                                          ║
-      ║   - Restored zram-generator config                               ║
-      ║   - Restarted zram setup service                                 ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Note: /etc/fstab entries must be manually uncommented            ║
-      ║       if you want to restore disk-based swap partitions          ║
-      ╚══════════════════════════════════════════════════════════════════╝
+      ===============================================
+      SWAP RESTORATION SUMMARY
+      ===============================================
+      Swap Status: {{ 'ENABLED' if swap_status.stdout else 'DISABLED' }}
+      
+      Actions Taken:
+        - Unmasked swap.target
+        - Unmasked swap units
+        - Restored zram-generator config
+        - Restarted zram setup service
+      
+      Note: /etc/fstab entries must be manually
+            uncommented if you want to restore
+            disk-based swap partitions
+      ===============================================
 
 - name: Show current swap devices
   debug:

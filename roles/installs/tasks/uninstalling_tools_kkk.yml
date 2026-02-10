@@ -97,16 +97,16 @@
   debug:
     msg: |
       
-      ╔══════════════════════════════════════════════════════════════════╗
-      ║        KUBERNETES TOOLS UNINSTALLATION SUMMARY                   ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Removed Components:                                              ║
-      ║   - kubeadm: {{ ('✓' if kubeadm_check.rc != 0 else '⚠️') | center(49) }} ║
-      ║   - kubelet: {{ ('✓' if kubelet_check.rc != 0 else '⚠️') | center(49) }} ║
-      ║   - kubectl: {{ ('✓' if kubectl_check.rc != 0 else '⚠️') | center(49) }} ║
-      ║   - crictl: {{ ('✓' if crictl_check.rc != 0 else '⚠️') | center(50) }} ║
-      ║   - kubelet service                                              ║
-      ║   - Kubernetes configuration                                     ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Status: {{ ('SUCCESSFUL ✓' if (kubeadm_check.rc != 0 and kubelet_check.rc != 0 and kubectl_check.rc != 0) else 'INCOMPLETE ⚠️') | center(55) }} ║
-      ╚══════════════════════════════════════════════════════════════════╝
+      ===============================================
+      KUBERNETES TOOLS UNINSTALLATION SUMMARY
+      ===============================================
+      Removed Components:
+        - kubeadm: {{ 'OK' if kubeadm_check.rc != 0 else 'Still present' }}
+        - kubelet: {{ 'OK' if kubelet_check.rc != 0 else 'Still present' }}
+        - kubectl: {{ 'OK' if kubectl_check.rc != 0 else 'Still present' }}
+        - crictl: {{ 'OK' if crictl_check.rc != 0 else 'Still present' }}
+        - kubelet service
+        - Kubernetes configuration
+      
+      Status: {{ 'SUCCESSFUL' if (kubeadm_check.rc != 0 and kubelet_check.rc != 0 and kubectl_check.rc != 0) else 'INCOMPLETE' }}
+      ===============================================

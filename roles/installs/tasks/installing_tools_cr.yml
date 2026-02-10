@@ -311,22 +311,23 @@
   debug:
     msg: |
       
-      ╔══════════════════════════════════════════════════════════════════╗
-      ║            CONTAINERD INSTALLATION SUMMARY                       ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Status: {{ ('SUCCESSFUL ✓' if containerd_active.stdout == 'active' else 'FAILED ⚠️') | center(55) }} ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Containerd Version: {{ containerd_major_version | center(42) }} ║
-      ║ Service Status: {{ containerd_active.stdout | center(47) }} ║
-      ║ CRI Socket: {{ ('/run/containerd/containerd.sock EXISTS' if containerd_socket.stat.exists else 'NOT FOUND') | center(47) }} ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Configuration Applied:                                           ║
-      ║   ✓ SystemdCgroup = true                                         ║
-      ║   ✓ Kernel modules loaded (overlay, br_netfilter)                ║
-      ║   ✓ Sysctl parameters configured                                 ║
-      ║   ✓ Sandbox image: registry.k8s.io/pause:3.10                    ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Next Steps:                                                      ║
-      ║   1. Install kubeadm, kubelet, and kubectl                       ║
-      ║   2. Initialize Kubernetes cluster with kubeadm                  ║
-      ╚══════════════════════════════════════════════════════════════════╝
+      ===============================================
+      CONTAINERD INSTALLATION SUMMARY
+      ===============================================
+      Status: {{ 'SUCCESSFUL' if containerd_active.stdout == 'active' else 'FAILED' }}
+      
+      Installation Details:
+        - Containerd Version: {{ containerd_major_version }}
+        - Service Status: {{ containerd_active.stdout }}
+        - CRI Socket: {{ '/run/containerd/containerd.sock EXISTS' if containerd_socket.stat.exists else 'NOT FOUND' }}
+      
+      Configuration Applied:
+        - SystemdCgroup = true
+        - Kernel modules loaded (overlay, br_netfilter)
+        - Sysctl parameters configured
+        - Sandbox image: registry.k8s.io/pause:3.10
+      
+      Next Steps:
+        1. Install kubeadm, kubelet, and kubectl
+        2. Initialize Kubernetes cluster with kubeadm
+      ===============================================

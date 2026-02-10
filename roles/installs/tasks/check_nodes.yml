@@ -364,19 +364,21 @@
   debug:
     msg: |
       
-      ╔══════════════════════════════════════════════════════════════════╗
-      ║             KUBEADM PREREQUISITES CHECK SUMMARY                  ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Host: {{ inventory_hostname | center(56) }} ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ OS: {{ (ansible_distribution + ' ' + ansible_distribution_version) | center(58) }} ║
-      ║ Kernel: {{ kernel_version.stdout | center(54) }} ║
-      ║ Memory: {{ (ansible_memtotal_mb | string + ' MB') | center(54) }} ║
-      ║ CPUs: {{ (ansible_processor_vcpus | string) | center(56) }} ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Swap: {{ ('ENABLED ⚠️' if swap_status.stdout else 'Disabled ✓') | center(56) }} ║
-      ║ Container Runtime: {{ ('Found ✓' if (containerd_socket.stat.exists or crio_socket.stat.exists or cri_dockerd_socket.stat.exists) else 'NOT FOUND ⚠️') | center(42) }} ║
-      ║ Kubernetes Tools: {{ ('Installed' if kubeadm_installed.rc == 0 else 'Not installed') | center(43) }} ║
-      ╚══════════════════════════════════════════════════════════════════╝
+      ===============================================
+      KUBEADM PREREQUISITES CHECK SUMMARY
+      ===============================================
+      Host: {{ inventory_hostname }}
+      
+      System Information:
+        - OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+        - Kernel: {{ kernel_version.stdout }}
+        - Memory: {{ ansible_memtotal_mb }} MB
+        - CPUs: {{ ansible_processor_vcpus }}
+      
+      Status:
+        - Swap: {{ 'ENABLED (warning)' if swap_status.stdout else 'Disabled (ok)' }}
+        - Container Runtime: {{ 'Found' if (containerd_socket.stat.exists or crio_socket.stat.exists or cri_dockerd_socket.stat.exists) else 'NOT FOUND (warning)' }}
+        - Kubernetes Tools: {{ 'Installed' if kubeadm_installed.rc == 0 else 'Not installed' }}
+      ===============================================
 
 - 

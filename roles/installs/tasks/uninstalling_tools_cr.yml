@@ -126,19 +126,19 @@
   debug:
     msg: |
       
-      ╔══════════════════════════════════════════════════════════════════╗
-      ║          CONTAINERD UNINSTALLATION SUMMARY                       ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Status: {{ ('SUCCESSFUL ✓' if containerd_check.rc != 0 else 'INCOMPLETE ⚠️') | center(55) }} ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Removed Components:                                              ║
-      ║   - containerd binaries: {{ ('✓' if containerd_check.rc != 0 else '⚠️') | center(34) }} ║
-      ║   - runc binary: {{ ('✓' if runc_check.rc != 0 else '⚠️') | center(43) }} ║
-      ║   - CNI plugins                                                  ║
-      ║   - containerd service                                           ║
-      ║   - Configuration files                                          ║
-      ║   - Kernel modules config                                        ║
-      ║   - Sysctl parameters                                            ║
-      ╠══════════════════════════════════════════════════════════════════╣
-      ║ Note: Container images and volumes have been removed             ║
-      ╚══════════════════════════════════════════════════════════════════╝
+      ===============================================
+      CONTAINERD UNINSTALLATION SUMMARY
+      ===============================================
+      Status: {{ 'SUCCESSFUL' if containerd_check.rc != 0 else 'INCOMPLETE' }}
+      
+      Removed Components:
+        - containerd binaries: {{ 'OK' if containerd_check.rc != 0 else 'Still present' }}
+        - runc binary: {{ 'OK' if runc_check.rc != 0 else 'Still present' }}
+        - CNI plugins
+        - containerd service
+        - Configuration files
+        - Kernel modules config
+        - Sysctl parameters
+      
+      Note: Container images and volumes have been removed
+      ===============================================
