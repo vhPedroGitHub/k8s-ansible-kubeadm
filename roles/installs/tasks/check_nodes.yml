@@ -318,6 +318,7 @@
       register: ipv6_verify
       changed_when: false
       failed_when: false
+      when: kubeadmin.ipv6.enabled
 
     - name: Display verification results
       debug:

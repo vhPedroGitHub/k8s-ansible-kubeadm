@@ -22,28 +22,31 @@ kubeadmin:
     - Rocky
 
   kubernetes:
-    version: "v1.34.0"
-    
+    version: "v1.35.0"
+
   containerd:
-    version: "2.2.0"
+    version: "2.2.1"
     config_path: "/etc/containerd/config.toml"
     cri_plugin: "io.containerd.grpc.v1.cri"
-    url_targz: "https://github.com/containerd/containerd/releases/download/v2.2.0/containerd-2.2.0-linux-amd64.tar.gz"
+    url_targz: "https://github.com/containerd/containerd/releases/download/v2.2.1/containerd-2.2.1-linux-amd64.tar.gz"
   
   runc:
     version: "v1.4.0"
     url_binary: "https://github.com/opencontainers/runc/releases/download/v1.4.0/runc.amd64"
 
   cni_plugins:
-    version: "v1.8.0"
-    url_targz: "https://github.com/containernetworking/plugins/releases/download/v1.8.0/cni-plugins-linux-amd64-v1.8.0.tgz"
+    version: "v1.9.0"
+    url_targz: "https://github.com/containernetworking/plugins/releases/download/v1.9.0/cni-plugins-linux-amd64-v1.9.0.tgz"
 
   crictl:
-    version: "v1.34.0"
-    url_targz: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.34.0/crictl-v1.34.0-linux-amd64.tar.gz"
+    version: "v1.35.0"
+    url_targz: "https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.35.0/crictl-v1.35.0-linux-amd64.tar.gz"
   
   kubeadm:
-    version: "v0.16.2"
+    version: "v0.19.0"
 
   kubelet:
-    version: "v0.16.2"
+    version: "v0.19.0"
+
+  ipv6:
+    enabled: false
